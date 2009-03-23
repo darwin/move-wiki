@@ -1,0 +1,126 @@
+require 'rubygems'
+require 'spider/lib/spider.rb'
+require 'hpricot'
+require 'open-uri'
+require 'uri'
+require 'net/https'
+
+unless defined? OSX then
+  OSX = PLATFORM =~ /darwin/
+  WIN = PLATFORM =~ /win32/
+  NIX = !(OSX || WIN)
+end
+
+begin
+  require 'term/ansicolor'
+  include Term::ANSIColor
+rescue LoadError
+  raise 'Run "gem install term-ansicolor"'
+end
+# http://kpumuk.info/ruby-on-rails/colorizing-console-ruby-script-output/
+if WIN then
+  begin
+    require 'win32console'
+    include Win32::Console::ANSI
+  rescue LoadError
+    raise 'Run "gem install win32console" to use terminal colors on Windows'
+  end
+end
+
+# ------------------------------------------------------------------------------------------------------------
+
+def die(msg, code=1)
+  puts red(msg)
+  exit(code)
+end
+
+def fetch(parsed_url, &block)
+  http = Net::HTTP.new(parsed_url.host, parsed_url.port)
+  if parsed_url.scheme == 'https'
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  end
+  r = http.start {|h| h.request(Net::HTTP::Get.new(parsed_url.request_uri))}
+  block.call(r)
+end
+
+def post(parsed_url, data, &block)
+  http = Net::HTTP.new(parsed_url.host, parsed_url.port)
+  if parsed_url.scheme == 'https'
+    http.use_ssl = true
+    http.verify_mode = OpenSSL::SSL::VERIFY_NONE
+  end
+  #http.set_debug_output $stdout
+  req = Net::HTTP::Post.new(parsed_url.request_uri)
+  req.set_form_data(data)
+  r = http.start {|h| h.request(req)}
+  block.call(r) unless block.nil?
+end
+
+def run_spider!(user, repo, login, token, dest)
+  FileUtils.mkdir_p(dest)
+  root = "https://github.com/#{user}/#{repo}/wikis"
+  Spider.start_at(root) do |s|
+    s.decorator do |url|
+      puts "#{blue('found')} #{url}"
+      return url unless login
+      url + "?login=#{login}&token=#{token}"
+    end
+    s.add_url_check do |url|
+      url =~ %r{^#{root}.*}
+    end
+    s.on :success do |url, response|
+      puts "  #{green('fetching')} #{url}"
+      edit_url = url.sub('wikis?login', 'wikis/home?login').gsub('?login', '/edit?login')
+      fetch(URI.parse(edit_url)) do |r|
+        doc = Hpricot(r.body)
+        article = (doc/"#wiki_body").inner_html
+        name = edit_url.match(/wikis\/([^\/]+)\/edit/)[1]
+        path = File.join(dest, "#{name}.textile")
+        puts "  #{yellow('writing')} #{path} ..."
+        File.open(path, "w") do |f|
+          f << article.to_s
+        end
+      end
+    end
+  end
+end
+
+def do_push!(user, repo, login, token, source)
+  root = "https://github.com/#{user}/#{repo}/wikis/new?login=#{login}&token=#{token}"
+  Dir.glob(File.join(source, '*.textile')) do |filename|
+    next if File.directory?(filename)
+    name = File.basename(filename, '.textile')
+    article = File.read(filename)
+    puts "#{green('uploading article')} #{name} to #{blue(root)}..."
+    post(URI.parse(root), {'wiki[body]'=>article, 'wiki[title]'=>name, 'commit'=>'Create' }) do |r|
+      puts r.body
+    end
+  end
+end
+
+# ------------------------------------------------------------------------------------------------------------
+
+desc "user=defunkt repo=grit login=mojombo token=1234... dest=mywiki"
+task :pull_wiki do
+  repo = ENV["repo"] or die("specify github repo: rake pull_wiki repo=grit")
+  user = ENV["user"] || `git config github.user`.strip! or die("specify github user: rake pull_wiki repo=grit user=defunkt")
+  token = ENV["token"] || `git config github.token`.strip! or die("specify github token: rake pull_wiki repo=grit user=defunkt token=ffffffffffffffffffffffffffffffff")
+  login = ENV["login"] || `git config github.user`.strip! || user
+  dest = ENV["dest"] || "wikis/#{user}/#{repo}"
+
+  run_spider!(user, repo, login, token, dest)
+end
+
+desc "user=defunkt repo=grit login=mojombo token=1234... source=wikis/mojombo/grit"
+task :push_wiki do
+  repo = ENV["repo"] or die("specify github repo: rake pull_wiki repo=grit")
+  user = ENV["user"] || `git config github.user`.strip! or die("specify github user: rake pull_wiki repo=grit user=defunkt")
+  token = ENV["token"] || `git config github.token`.strip! or die("specify github token: rake pull_wiki repo=grit user=defunkt token=ffffffffffffffffffffffffffffffff")
+  login = ENV["login"] || `git config github.user`.strip! || user
+  source = ENV["source"] || "wikis/#{user}/#{repo}"
+
+  do_push!(user, repo, login, token, source)
+end
+
+task :default => :pull_wiki

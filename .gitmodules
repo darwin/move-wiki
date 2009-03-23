@@ -1,0 +1,3 @@
+[submodule "spider"]
+	path = spider
+	url = git://github.com/darwin/spider.git
