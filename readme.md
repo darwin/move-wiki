@@ -7,6 +7,13 @@ I needed to move all wiki pages between two repos.
 * pull_wiki - download wiki files from selected github repo to disk
 * push_wiki - upload wiki files from disk to selected github repo
 
+## Install
+
+    git clone git://github.com/darwin/move-wiki.git
+    cd move-wiki
+    git submodule init
+    git submodule update
+
 ## Prerequisities
 
 Tell me who you are. Set your GitHub credentials into global git config (see [account](/account) page):
@@ -21,4 +28,3 @@ Tell me who you are. Set your GitHub credentials into global git config (see [ac
 ## Push
 
     rake push_wiki user=mojombo repo=grit source=some/dir
-    
