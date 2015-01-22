@@ -16,7 +16,7 @@ I needed to move all wiki pages between two repos.
 
 ## Prerequisities
 
-Tell me who you are. Set your GitHub credentials into global git config (see [account](/account) page):
+Tell me who you are. Set your GitHub credentials into global git config (see [account](https://github.com/settings/applications) page):
 
     git config --global github.user darwin
     git config --global github.token fffffffffffffffffffffffffffc122c
