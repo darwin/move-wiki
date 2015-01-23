@@ -28,3 +28,15 @@ Tell me who you are. Set your GitHub credentials into global git config (see [ac
 ## Push
 
     rake push_wiki user=mojombo repo=grit source=some/dir
+    
+## Alternate method (does not use move-wiki)
+
+First create a blank wiki in the `mojombo/grit` repo via Github.com, then:
+
+    git clone git@github.com:defunkt/grit.wiki.git
+    cd grit
+    git remote add new git@github.com:mojombo/grit.wiki.git
+    git pull new
+    [merge conflicts and commit]
+    git push new master
+    
